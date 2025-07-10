@@ -1,11 +1,14 @@
 package com.example.bongbongshow_market.controller;
 
+import com.example.bongbongshow_market.point.StockChangePoint;
 import com.example.bongbongshow_market.service.StockService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
+
+import java.util.List;
 
 @Controller
 @RequiredArgsConstructor
@@ -28,7 +31,7 @@ public class StockController {
 
     @GetMapping("/main")// main 페이지 띄우기
     public String ShowChangePage(Model model) {
-        double change = service.fetchStockChange();
+        List<StockChangePoint> change = service.fetchStockChange();
         System.out.println("HTML로 넘기는 change = " + change); //html에 change값 넘기기
         model.addAttribute("change", change);
         return "main";
