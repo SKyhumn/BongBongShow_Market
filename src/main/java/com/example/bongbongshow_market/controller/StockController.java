@@ -18,8 +18,8 @@ public class StockController {
 
     @GetMapping("/check") //주가 변동률을 수동으로 출력
     public ResponseEntity<String> checkStock(){
-        service.fetchStockChange();
-        return ResponseEntity.ok("주가 변동 완료");
+        service.fetchAndProcessAllIntradayData(); // 전체 데이터 다시 로드
+        return ResponseEntity.ok("주가 변동 데이터 수동 로드 완료");
     }
 
     //주가 변동률을 JSON 숫자 형태로 반환
@@ -31,7 +31,7 @@ public class StockController {
 
     @GetMapping("/main")// main 페이지 띄우기
     public String ShowChangePage(Model model) {
-        List<StockChangePoint> change = service.fetchStockChange();
+        List<StockChangePoint> change = service.getAllIntradayChanges();
         System.out.println("HTML로 넘기는 change = " + change); //html에 change값 넘기기
         model.addAttribute("change", change);
         return "main";
