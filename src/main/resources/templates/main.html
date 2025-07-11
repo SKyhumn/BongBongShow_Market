@@ -2,10 +2,45 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Title</title>
+    <title>AAPL 주가 변동률</title>
+    <script>
+        function updateStockChange() {
+            fetch('/api/current-stock-change') // 백엔드의 API 엔드포인트 호출
+                .then(response => response.json()) // 응답을 JSON 형태로 파싱
+                .then(data => {
+                    const timestampElement = document.getElementById('current-timestamp');
+                    const changeElement = document.getElementById('current-change');
+
+                    if (data.status === 'success') {
+                        timestampElement.textContent = data.timestamp;
+                        changeElement.textContent = data.change;
+                    } else {
+                        timestampElement.textContent = data.timestamp; // "N/A"
+                        changeElement.textContent = data.change;       // "N/A"
+                        console.warn("데이터를 가져오지 못했습니다: " + data.status);
+                    }
+                })
+                .catch(error => {
+                    console.error('데이터를 가져오는 중 오류 발생:', error);
+                    document.getElementById('current-timestamp').textContent = "오류";
+                    document.getElementById('current-change').textContent = "오류";
+                });
+        }
+
+        // 페이지 로드 시 최초 한 번 데이터 업데이트
+        document.addEventListener('DOMContentLoaded', function() {
+            updateStockChange();
+            setInterval(updateStockChange, 10 * 1000); // 예시: 15초마다 업데이트 (테스트용)
+            // setInterval(updateStockChange, 15 * 60 * 1000); // 실제 15분 주기
+        });
+    </script>
 </head>
 <body>
 <h1>AAPL 주가 변동률</h1>
-<p>현재 변동률: <span th:text="${#numbers.formatDecimal(change, 1, 2)} + '%'">0%</span></p>
+
+<div>
+    <p>현재 시간: <span id="current-timestamp">로딩 중...</span></p>
+    <p>현재 변동률: <span id="current-change">로딩 중...</span>%</p>
+</div>
 </body>
 </html>

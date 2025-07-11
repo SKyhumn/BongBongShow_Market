@@ -21,23 +21,26 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
-@Getter
-@Setter
 public class StockService {
     private final RestTemplate restTemplate = new RestTemplate();
     private final Map<String, CachedStock> cache = new HashMap<>();
 
+    @Getter
     private List<StockChangePoint> allIntradayChanges = new ArrayList<>();
     private int currentDataIndex =  0;
+
+    @Getter
+    private StockChangePoint currentStockPoint = null;
 
     @PostConstruct
     public void loadInitialStockData(){
         fetchAndProcessAllIntradayData();
     }
 
-    // @Scheduled(fixedRate = 15 * 60 * 1000) // 15분 마다 재사용하기
+    //@Scheduled(fixedRate = 15 * 60 * 1000) // 15분 마다 재사용하기
     @Scheduled(fixedRate = 10 * 1000) //테스트용
     public void displayNextStockChange(){
+        //주간 주식 변동 데이터 리스트가 비어있는지 확인
         if(allIntradayChanges.isEmpty()){
             System.out.println("No intraday stock data available. Attempting to reload...");
             fetchAndProcessAllIntradayData(); // 데이터가 없으면 다시 로드 시도
@@ -46,24 +49,23 @@ public class StockService {
                 return;
             }
         }
-
+        // 현재 데이터 인덱스(currentDataIndex)가 전체 데이터 리스트의 크기(allIntradayChanges.size())와 같거나 크면
+        // (즉, 모든 데이터를 한 바퀴 돌았거나 리스트 범위를 벗어나면)
+        //인덱스를 0으로 초기화 시킴
         if (currentDataIndex >= allIntradayChanges.size()) {
             System.out.println("End of current data sequence. Resetting index or reloading data.");
             currentDataIndex = 0;
         }
-
-        StockChangePoint pointToDisplay = allIntradayChanges.get(currentDataIndex);
+        // allIntradayChanges 리스트에서 현재 인덱스(currentDataIndex)에 해당하는 StockChangePoint 객체를 가져와
+        // currentStockPoint 변수에 저장합니다. 이 값이 AJAX 요청으로 웹에 전달
+        currentStockPoint = allIntradayChanges.get(currentDataIndex);
         System.out.printf("[시간: %s] 변동률: %.2f%%\n",
-                ZonedDateTime.parse(pointToDisplay.getTimestamp()).toLocalTime(),
-                pointToDisplay.getChange());
+                ZonedDateTime.parse(currentStockPoint.getTimestamp()).toLocalTime(),
+                currentStockPoint.getChange());
         currentDataIndex++;
     }
 
-    public List<StockChangePoint> getAllIntradayChanges() {
-        return allIntradayChanges;
-    }
-
-    public List<StockChangePoint> fetchAndProcessAllIntradayData(){
+    public void fetchAndProcessAllIntradayData(){
         String ticker = "AAPL";
         String url = "https://query1.finance.yahoo.com/v8/finance/chart/" + ticker + "?interval=15m&range=5d";
 
@@ -127,17 +129,18 @@ public class StockService {
 
             if (allIntradayChanges.isEmpty()) {
                 System.out.println("No stock data found within the specified time range (23:30-06:00) for " + ticker);
+                currentStockPoint = null;
             } else {
                 System.out.println("Successfully loaded " + allIntradayChanges.size() + " intraday stock points.");
                 currentDataIndex = 0;
+                currentStockPoint = allIntradayChanges.get(currentDataIndex);
             }
-            return allIntradayChanges;
         }catch (Exception e){
             e.printStackTrace();
             System.err.println("Error fetching or processing stock data: " + e.getMessage());
             allIntradayChanges.clear();
+            currentStockPoint = null;
         }
-        return Collections.emptyList();
     }
 
     public double getCachedStockChange(String ticker) {
