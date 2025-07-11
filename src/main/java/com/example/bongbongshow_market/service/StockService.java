@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
 import lombok.Getter;
+import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -21,6 +22,7 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
+@RequiredArgsConstructor
 public class StockService {
     private final RestTemplate restTemplate = new RestTemplate();
     private final Map<String, CachedStock> cache = new HashMap<>();
@@ -29,12 +31,14 @@ public class StockService {
     private List<StockChangePoint> allIntradayChanges = new ArrayList<>();
     private int currentDataIndex =  0;
 
+    private int dayAgoToFetch = 1;
+
     @Getter
     private StockChangePoint currentStockPoint = null;
 
     @PostConstruct
     public void loadInitialStockData(){
-        fetchAndProcessAllIntradayData();
+        fetchAndProcessAllIntradayData(dayAgoToFetch);
     }
 
     //@Scheduled(fixedRate = 15 * 60 * 1000) // 15분 마다 재사용하기
@@ -43,7 +47,7 @@ public class StockService {
         //주간 주식 변동 데이터 리스트가 비어있는지 확인
         if(allIntradayChanges.isEmpty()){
             System.out.println("No intraday stock data available. Attempting to reload...");
-            fetchAndProcessAllIntradayData(); // 데이터가 없으면 다시 로드 시도
+            fetchAndProcessAllIntradayData(dayAgoToFetch); // 데이터가 없으면 다시 로드 시도
             if (allIntradayChanges.isEmpty()) {
                 System.out.println("Failed to load data.");
                 return;
@@ -51,21 +55,39 @@ public class StockService {
         }
         // 현재 데이터 인덱스(currentDataIndex)가 전체 데이터 리스트의 크기(allIntradayChanges.size())와 같거나 크면
         // (즉, 모든 데이터를 한 바퀴 돌았거나 리스트 범위를 벗어나면)
+        // 데이터의 하루전 값으로 데이터를 설정하고
         //인덱스를 0으로 초기화 시킴
         if (currentDataIndex >= allIntradayChanges.size()) {
-            System.out.println("End of current data sequence. Resetting index or reloading data.");
+            System.out.println("현재 날짜의 데이터를 전부 출력 했습니다 하루전 데이터를 설정 합니다");
+            dayAgoToFetch++;
+            if(dayAgoToFetch > 5){
+                System.out.println("현재 날짜가 너무 과거로 설정되어 있습니다 데이터를 현 날짜의 2일전 데이터로 설정합니다");
+                dayAgoToFetch = 1;
+            }
+            fetchAndProcessAllIntradayData(dayAgoToFetch);
+            if(allIntradayChanges.isEmpty()){
+                System.out.println("데이터를 찾을 수 없습니다 그 전날의 데이터를 설정하겠습니다");
+                return;
+            }
             currentDataIndex = 0;
+        }
+
+        // currentStockPoint가 비워있는데 확인
+        if(currentStockPoint == null){
+            System.out.println("current stock point 가 비워 있습니다 더이상 실행하지 않고 종류 하겠습니다");
+            return;
         }
         // allIntradayChanges 리스트에서 현재 인덱스(currentDataIndex)에 해당하는 StockChangePoint 객체를 가져와
         // currentStockPoint 변수에 저장합니다. 이 값이 AJAX 요청으로 웹에 전달
         currentStockPoint = allIntradayChanges.get(currentDataIndex);
-        System.out.printf("[시간: %s] 변동률: %.2f%%\n",
-                ZonedDateTime.parse(currentStockPoint.getTimestamp()).toLocalTime(),
+        System.out.printf("[시간: %s, 기준: %d일 전] 변동률: %.2f%%\n",
+                ZonedDateTime.parse(currentStockPoint.getTimestamp()).toLocalTime(), // %s 에 대응
+                dayAgoToFetch,                                                  // %d 에 대응
                 currentStockPoint.getChange());
         currentDataIndex++;
     }
 
-    public void fetchAndProcessAllIntradayData(){
+    public void fetchAndProcessAllIntradayData(int dayOffset){
         String ticker = "AAPL";
         String url = "https://query1.finance.yahoo.com/v8/finance/chart/" + ticker + "?interval=15m&range=5d";
 
@@ -85,6 +107,8 @@ public class StockService {
              주가 변동 데이터 가지고 오기
              2일전 주가와 3일 전 닫혔을 때 주가를 가지고 온 뒤
              (현재 주가 - 닫힐 때 주가) / 닫힐 때 주가 * 100
+             만약 23:30분 부터 6:00분 까지 전부 돌았다면
+             하루 전 변동률을 가지고 와서 변동률을 구함
              */
             ObjectMapper mapper = new ObjectMapper();
             JsonNode root = mapper.readTree(response.getBody());
@@ -96,10 +120,15 @@ public class StockService {
 
             List<StockChangePoint> tempChanges = new ArrayList<>();
 
-            ZonedDateTime now = ZonedDateTime.now(ZoneId.of("Asia/Seoul"));
+            ZonedDateTime targetDateStart = ZonedDateTime.now(ZoneId.of("Asia/Seoul"))
+                    .toLocalDate()
+                    .minusDays(dayOffset)
+                    .atStartOfDay(ZoneId.of("Asia/Seoul"));
+                    ZonedDateTime targetDateEnd = targetDateStart.plusDays(1);
 
             for (int i = 0; i < timestamps.size(); i++) {
                 long ts = timestamps.get(i).asLong();
+                ZonedDateTime time = Instant.ofEpochSecond(ts).atZone(ZoneId.of("Asia/Seoul"));
 
                 if (closes.get(i) == null || closes.get(i).isNull()) {
                     continue;
@@ -109,21 +138,18 @@ public class StockService {
                 if (price == 0.0) {
                     continue;
                 }
-                ZonedDateTime time = Instant.ofEpochSecond(ts).atZone(ZoneId.of("Asia/Seoul"));
-                double change = ((price - prevClose) / prevClose) * 100;
-                change = Math.round(change * 100.0) / 100.0;
-                tempChanges.add(new StockChangePoint(time.toString(), change));
+
+                ZonedDateTime filterStart = targetDateStart.withHour(23).withMinute(30).withSecond(0).withNano(0);
+                ZonedDateTime filterEnd = targetDateEnd.plusDays(1).withHour(6).withMinute(0).withSecond(0).withNano(0);
+
+                if ((time.isEqual(filterStart) || time.isAfter(filterStart)) && time.isBefore(filterEnd)) {
+                    double change = ((price - prevClose) / prevClose) * 100;
+                    change = Math.round(change * 100.0) / 100.0;
+                    tempChanges.add(new StockChangePoint(time.toString(), change));
+                }
             }
 
-            ZonedDateTime todayStart = ZonedDateTime.now(ZoneId.of("Asia/Seoul")).toLocalDate().atStartOfDay(ZoneId.of("Asia/Seoul"));
-            ZonedDateTime yesterday2330 = todayStart.minusDays(1).withHour(23).withMinute(30).withSecond(0).withNano(0);
-            ZonedDateTime today0600 = todayStart.withHour(6).withMinute(0).withSecond(0).withNano(0);
-
             allIntradayChanges = tempChanges.stream()
-                    .filter(point -> {
-                        ZonedDateTime pointTime = ZonedDateTime.parse(point.getTimestamp());
-                        return (pointTime.isEqual(yesterday2330) || pointTime.isAfter(yesterday2330)) && pointTime.isBefore(today0600);
-                    })
                     .sorted(Comparator.comparing(point -> ZonedDateTime.parse(point.getTimestamp()))) // 시간 순으로 정렬
                     .collect(Collectors.toList());
 

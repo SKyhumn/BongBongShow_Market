@@ -18,7 +18,7 @@ public class StockController {
 
     @GetMapping("/check") //주가 변동률을 수동으로 출력
     public ResponseEntity<String> checkStock(){
-        service.fetchAndProcessAllIntradayData(); // 전체 데이터 다시 로드
+        service.fetchAndProcessAllIntradayData(1); // 전체 데이터 다시 로드
         return ResponseEntity.ok("주가 변동 데이터 수동 로드 완료");
     }
 
