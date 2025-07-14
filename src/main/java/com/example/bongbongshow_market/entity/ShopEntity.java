@@ -2,12 +2,12 @@ package com.example.bongbongshow_market.entity;
 
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
-import lombok.Getter;
-import lombok.Setter;
+import jakarta.persistence.Table;
+import lombok.Data;
 
 @Entity
-@Getter
-@Setter
+@Data
+@Table(name = "shop")
 public class ShopEntity {//엔티티임
     @Id
     private String goods_id;

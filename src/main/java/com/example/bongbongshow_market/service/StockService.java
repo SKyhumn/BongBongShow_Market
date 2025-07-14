@@ -1,6 +1,8 @@
 package com.example.bongbongshow_market.service;
 
+import com.example.bongbongshow_market.entity.ShopEntity;
 import com.example.bongbongshow_market.point.StockChangePoint;
+import com.example.bongbongshow_market.repository.StockRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
@@ -24,6 +26,7 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class StockService {
+    private final StockRepository repository;
     private final RestTemplate restTemplate = new RestTemplate();
     private final Map<String, CachedStock> cache = new HashMap<>();
 
@@ -73,19 +76,42 @@ public class StockService {
         }
 
         // currentStockPoint가 비워있는데 확인
-        if(currentStockPoint == null){
+        if(currentStockPoint == null && !allIntradayChanges.isEmpty()){
+            currentStockPoint = allIntradayChanges.get(currentDataIndex);
+        } else if (currentStockPoint == null && allIntradayChanges.isEmpty()) {
             System.out.println("current stock point 가 비워 있습니다 더이상 실행하지 않고 종류 하겠습니다");
             return;
         }
+
+        currentStockPoint = allIntradayChanges.get(currentDataIndex);
+        double stockChangePercentage = currentStockPoint.getChange();
+
         // allIntradayChanges 리스트에서 현재 인덱스(currentDataIndex)에 해당하는 StockChangePoint 객체를 가져와
         // currentStockPoint 변수에 저장합니다. 이 값이 AJAX 요청으로 웹에 전달
-        currentStockPoint = allIntradayChanges.get(currentDataIndex);
         System.out.printf("[시간: %s, 기준: %d일 전] 변동률: %.2f%%\n",
                 ZonedDateTime.parse(currentStockPoint.getTimestamp()).toLocalTime(), // %s 에 대응
                 dayAgoToFetch,                                                  // %d 에 대응
                 currentStockPoint.getChange());
         currentDataIndex++;
+
+        List<ShopEntity> allGoods = repository.findAll();
+        for (ShopEntity goods : allGoods) {
+            double originalPrice = goods.getPrice(); // MySQL에서 가져온 상품의 원래 가격
+
+            // 새로운 가격 계산: 원래 가격 * (1 + (변동률 / 100))
+            // 예시: 100000 * (1 + (0.5 / 100)) = 100000 * 1.005 = 100500
+            double newCalculatedPrice = originalPrice * (1 + (stockChangePercentage / 100.0));
+
+            // 소수점 둘째 자리까지 반올림 (필요한 경우)
+            newCalculatedPrice = Math.round(newCalculatedPrice * 100.0) / 100.0;
+
+            System.out.printf("  [상품 ID: %s, 상품명: %s] 원래 가격: %.0f원, 적용 후 가격: %.0f원\n",
+                    goods.getGoods_id(), goods.getGoods_name(), originalPrice, newCalculatedPrice);
+        }
+
+        currentDataIndex++;
     }
+
 
     public void fetchAndProcessAllIntradayData(int dayOffset){
         String ticker = "AAPL";
@@ -153,8 +179,9 @@ public class StockService {
                     .sorted(Comparator.comparing(point -> ZonedDateTime.parse(point.getTimestamp()))) // 시간 순으로 정렬
                     .collect(Collectors.toList());
 
-            if (allIntradayChanges.isEmpty()) {
+            if (allIntradayChanges.isEmpty()) { // 데이터가 없으면 그 전날 데이터 가지고 오기
                 System.out.println("No stock data found within the specified time range (23:30-06:00) for " + ticker);
+                dayAgoToFetch++;
                 currentStockPoint = null;
             } else {
                 System.out.println("Successfully loaded " + allIntradayChanges.size() + " intraday stock points.");
