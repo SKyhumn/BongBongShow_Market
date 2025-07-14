@@ -1,0 +1,36 @@
+{
+    "example":[
+        {
+            "name":"EnergyDrink",
+            "quantity":5
+        },
+        {
+            "name":"Cookie",
+            "quantity":6
+        },
+        {
+            "name":"Chip",
+            "quantity":9
+        },
+        {
+            "name":"Ramyeon",
+            "quantity":2
+        },
+        {
+            "name":"Getorade",
+            "quantity":0
+        },
+        {
+            "name":"2%",
+            "quantity":2
+        },
+        {
+            "name":"Jelly",
+            "quantity":4
+        },
+        {
+            "name":"nacho",
+            "quantity":0
+        }
+    ]
+}
