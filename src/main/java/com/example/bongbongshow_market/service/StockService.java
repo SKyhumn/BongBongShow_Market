@@ -20,6 +20,7 @@ import org.springframework.web.client.RestTemplate;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
+import java.time.DayOfWeek;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -28,93 +29,107 @@ import java.util.stream.Collectors;
 public class StockService {
     private final StockRepository repository;
     private final RestTemplate restTemplate = new RestTemplate();
-    private final Map<String, CachedStock> cache = new HashMap<>();
 
-    @Getter
-    private List<StockChangePoint> allIntradayChanges = new ArrayList<>();
-    private int currentDataIndex =  0;
+    private final Map<String, List<StockChangePoint>> allIntradayChangesMap = new HashMap<>();
+    private final Map<String, Integer> currentDataIndexMap = new HashMap<>();
+    private final Map<String, StockChangePoint> currentStockPointMap = new HashMap<>();
 
-    private int dayAgoToFetch = 1;
 
-    @Getter
-    private StockChangePoint currentStockPoint = null;
+
+    private final Map<String, Integer> tickerDayAgoToFetchMap = new HashMap<>();
+
+    private final List<String> tickers = Arrays.asList("AAPL", "MSFT", "GOOG", "AMZN", "NVDA", "TSLA", "META", "NFLX");
+
+    //private int dayAgoToFetch = 1; // 제거된 변수
+
+    //@Getter private StockChangePoint currentStockPoint = null; // 제거된 변수
 
     @PostConstruct
     public void loadInitialStockData(){
-        fetchAndProcessAllIntradayData(dayAgoToFetch);
+        for (String ticker : tickers) {
+            tickerDayAgoToFetchMap.put(ticker, 1);
+            fetchAndProcessAllIntradayData(ticker, tickerDayAgoToFetchMap.get(ticker));
+        }
     }
 
     //@Scheduled(fixedRate = 15 * 60 * 1000) // 15분 마다 재사용하기
     @Scheduled(fixedRate = 10 * 1000) //테스트용
     public void displayNextStockChange(){
-        //주간 주식 변동 데이터 리스트가 비어있는지 확인
-        if(allIntradayChanges.isEmpty()){
-            System.out.println("No intraday stock data available. Attempting to reload...");
-            fetchAndProcessAllIntradayData(dayAgoToFetch); // 데이터가 없으면 다시 로드 시도
-            if (allIntradayChanges.isEmpty()) {
-                System.out.println("Failed to load data.");
-                return;
+        for (String ticker : tickers){
+            List<StockChangePoint> currentTickerChanges = allIntradayChangesMap.getOrDefault(ticker, new ArrayList<>());
+            int currentTickerDataIndex = currentDataIndexMap.getOrDefault(ticker, 0);
+            int currentDayOffset = tickerDayAgoToFetchMap.getOrDefault(ticker, 1); // 해당 티커의 dayOffset 가져옴
+
+            //주간 주식 변동 데이터 리스트가 비어있는지 확인
+            if(currentTickerChanges.isEmpty()){
+                System.out.println("No intraday stock data available for " + ticker + ". Attempting to load next day's data...");
+                currentDayOffset++; // ⭐ 데이터가 없으니 즉시 다음 날짜로 넘김
+                if(currentDayOffset > 5){
+                    currentDayOffset = 1;
+                }
+                tickerDayAgoToFetchMap.put(ticker, currentDayOffset);
+                fetchAndProcessAllIntradayData(ticker, currentDayOffset);
+                currentTickerChanges = allIntradayChangesMap.get(ticker);
+                if (currentTickerChanges == null || currentTickerChanges.isEmpty()) {
+                    System.out.println("Failed to load any data for " + ticker + " even after attempting reload. Skipping.");
+                    continue;
+                }
+                currentTickerDataIndex = 0;
+                currentDataIndexMap.put(ticker, currentTickerDataIndex);
             }
-        }
-        // 현재 데이터 인덱스(currentDataIndex)가 전체 데이터 리스트의 크기(allIntradayChanges.size())와 같거나 크면
-        // (즉, 모든 데이터를 한 바퀴 돌았거나 리스트 범위를 벗어나면)
-        // 데이터의 하루전 값으로 데이터를 설정하고
-        //인덱스를 0으로 초기화 시킴
-        if (currentDataIndex >= allIntradayChanges.size()) {
-            System.out.println("현재 날짜의 데이터를 전부 출력 했습니다 하루전 데이터를 설정 합니다");
-            dayAgoToFetch++;
-            if(dayAgoToFetch > 5){
-                System.out.println("현재 날짜가 너무 과거로 설정되어 있습니다 데이터를 현 날짜의 2일전 데이터로 설정합니다");
-                dayAgoToFetch = 1;
+            // 현재 데이터 인덱스(currentDataIndex)가 전체 데이터 리스트의 크기(allIntradayChanges.size())와 같거나 크면
+            // (즉, 모든 데이터를 한 바퀴 돌았거나 리스트 범위를 벗어나면)
+            // 데이터의 하루전 값으로 데이터를 설정하고
+            //인덱스를 0으로 초기화 시킴
+            if (currentTickerDataIndex >= currentTickerChanges.size()) {
+                System.out.println("All data points for " + ticker + " on current dayOffset " + currentDayOffset + " processed. Moving to next day's data.");
+                currentDayOffset++;
+                if(currentDayOffset > 5){
+                    currentDayOffset = 1;
+                }
+                tickerDayAgoToFetchMap.put(ticker, currentDayOffset);
+                fetchAndProcessAllIntradayData(ticker, currentDayOffset);
+                currentTickerChanges = allIntradayChangesMap.get(ticker);
+                if(currentTickerChanges == null || currentTickerChanges.isEmpty()){
+                    System.out.println(ticker + "에 대해 데이터를 찾을 수 없습니다. 다음 날짜로 다시 시도하겠습니다.");
+                    continue;
+                }
+                currentTickerDataIndex = 0;
+                currentDataIndexMap.put(ticker, currentTickerDataIndex);
             }
-            fetchAndProcessAllIntradayData(dayAgoToFetch);
-            if(allIntradayChanges.isEmpty()){
-                System.out.println("데이터를 찾을 수 없습니다 그 전날의 데이터를 설정하겠습니다");
-                return;
+
+            // currentTickerStockPoint 업데이트
+            StockChangePoint currentTickerStockPoint = currentTickerChanges.get(currentTickerDataIndex);
+            double stockChangePercentage = currentTickerStockPoint.getChange();
+
+            // allIntradayChanges 리스트에서 현재 인덱스(currentDataIndex)에 해당하는 StockChangePoint 객체를 가져와
+            // currentStockPoint 변수에 저장합니다. 이 값이 AJAX 요청으로 웹에 전달
+            System.out.printf("[티커: %s, 시간: %s, 기준: %d일 전] 변동률: %.2f%%\n",
+                    ticker,
+                    ZonedDateTime.parse(currentTickerStockPoint.getTimestamp()).toLocalTime(),
+                    currentDayOffset, // 현재 티커의 currentDayOffset 사용
+                    stockChangePercentage);
+
+            List<ShopEntity> allGoods = repository.findAll(); // 모든 상품을 가져옴
+            for (ShopEntity goods : allGoods) {
+                // 특정 티커와 상품을 매핑하는 로직이 없으므로 현재는 모든 상품에 이 변동률을 적용함
+                double originalPrice = goods.getUpdatedPrice();
+                double newCalculatedPrice = originalPrice * (1 + (stockChangePercentage / 100.0));
+                newCalculatedPrice = Math.round(newCalculatedPrice * 100.0) / 100.0;
+
+                goods.setUpdatedPrice(newCalculatedPrice); // ⭐ 업데이트된 가격 설정
+                System.out.printf("  [상품 ID: %s, 상품명: %s] 원래 가격: %.0f원, 적용 후 가격: %.0f원\n",
+                        goods.getGoods_id(), goods.getGoods_name(), originalPrice, newCalculatedPrice);
             }
-            currentDataIndex = 0;
+            repository.saveAll(allGoods); // 변경된 모든 상품 저장
+            currentTickerDataIndex++;
+            currentDataIndexMap.put(ticker, currentTickerDataIndex); // 인덱스 업데이트
+            currentStockPointMap.put(ticker, currentTickerStockPoint); // 현재 포인트 업데이트 (다음 스케줄링 시 사용)
         }
-
-        // currentStockPoint가 비워있는데 확인
-        if(currentStockPoint == null && !allIntradayChanges.isEmpty()){
-            currentStockPoint = allIntradayChanges.get(currentDataIndex);
-        } else if (currentStockPoint == null && allIntradayChanges.isEmpty()) {
-            System.out.println("current stock point 가 비워 있습니다 더이상 실행하지 않고 종류 하겠습니다");
-            return;
-        }
-
-        currentStockPoint = allIntradayChanges.get(currentDataIndex);
-        double stockChangePercentage = currentStockPoint.getChange();
-
-        // allIntradayChanges 리스트에서 현재 인덱스(currentDataIndex)에 해당하는 StockChangePoint 객체를 가져와
-        // currentStockPoint 변수에 저장합니다. 이 값이 AJAX 요청으로 웹에 전달
-        System.out.printf("[시간: %s, 기준: %d일 전] 변동률: %.2f%%\n",
-                ZonedDateTime.parse(currentStockPoint.getTimestamp()).toLocalTime(), // %s 에 대응
-                dayAgoToFetch,                                                  // %d 에 대응
-                currentStockPoint.getChange());
-        currentDataIndex++;
-
-        List<ShopEntity> allGoods = repository.findAll();
-        for (ShopEntity goods : allGoods) {
-            double originalPrice = goods.getUpdatedPrice(); // MySQL에서 가져온 상품의 원래 가격
-
-            // 새로운 가격 계산: 원래 가격 * (1 + (변동률 / 100))
-            // 예시: 100000 * (1 + (0.5 / 100)) = 100000 * 1.005 = 100500
-            double newCalculatedPrice = originalPrice * (1 + (stockChangePercentage / 100.0));
-
-            // 소수점 둘째 자리까지 반올림 (필요한 경우)
-            newCalculatedPrice = Math.round(newCalculatedPrice * 100.0) / 100.0;
-
-            System.out.printf("  [상품 ID: %s, 상품명: %s] 원래 가격: %.0f원, 적용 후 가격: %.0f원\n",
-                    goods.getGoods_id(), goods.getGoods_name(), originalPrice, newCalculatedPrice);
-        }
-        repository.saveAll(allGoods);
-        currentDataIndex++;
     }
 
 
-    public void fetchAndProcessAllIntradayData(int dayOffset){
-        String ticker = "AAPL";
+    public void fetchAndProcessAllIntradayData(String ticker ,int dayOffset){
         String url = "https://query1.finance.yahoo.com/v8/finance/chart/" + ticker + "?interval=15m&range=5d";
 
         try{ // 주가 변동 퍼센트로 가지고 오기
@@ -148,15 +163,20 @@ public class StockService {
 
             Double previousConsideredPrice = null;
 
-            ZonedDateTime targetDateStart = ZonedDateTime.now(ZoneId.of("Asia/Seoul"))
+            ZonedDateTime targetDateStartET = ZonedDateTime.now(ZoneId.of("America/New_York"))
                     .toLocalDate()
                     .minusDays(dayOffset)
-                    .atStartOfDay(ZoneId.of("Asia/Seoul"));
-            ZonedDateTime targetDateEnd = targetDateStart.plusDays(1);
+                    .atStartOfDay(ZoneId.of("America/New_York"));
+            ZonedDateTime targetDateEndET = targetDateStartET.plusDays(1);
+
+            System.out.println("--- Fetching data for " + ticker + " (dayOffset: " + dayOffset + ") ---");
+            System.out.println("Target Date Start (ET): " + targetDateStartET);
+            System.out.println("Target Date End (ET): " + targetDateEndET);
+
 
             for (int i = 0; i < timestamps.size(); i++) {
                 long ts = timestamps.get(i).asLong();
-                ZonedDateTime time = Instant.ofEpochSecond(ts).atZone(ZoneId.of("Asia/Seoul"));
+                ZonedDateTime timeET = Instant.ofEpochSecond(ts).atZone(ZoneId.of("America/New_York"));
 
                 if (closes.get(i) == null || closes.get(i).isNull()) {
                     continue;
@@ -167,48 +187,56 @@ public class StockService {
                     continue;
                 }
 
-                ZonedDateTime filterStart = targetDateStart.withHour(23).withMinute(30).withSecond(0).withNano(0);
-                ZonedDateTime filterEnd = targetDateEnd.plusDays(1).withHour(6).withMinute(0).withSecond(0).withNano(0);
+                boolean isMarketOpenHours = (timeET.getHour() > 9 || (timeET.getHour() == 9 && timeET.getMinute() >= 30))
+                        && (timeET.getHour() < 16);
 
-                if ((time.isEqual(filterStart) || time.isAfter(filterStart)) && time.isBefore(filterEnd)) {
+                boolean isWeekday = timeET.getDayOfWeek() != DayOfWeek.SATURDAY && timeET.getDayOfWeek() != DayOfWeek.SUNDAY;
+
+
+                if (timeET.toLocalDate().isEqual(targetDateStartET.toLocalDate()) && isMarketOpenHours && isWeekday) {
                     double change;
 
-                    if (time.getHour() == 23 && time.getMinute() == 30) {
+                    if (timeET.getHour() == 9 && timeET.getMinute() == 30) {
                         change = ((price - prevClose) / prevClose) * 100;
-                        previousConsideredPrice = price; // 23:30 가격을 다음 비교를 위한 기준으로 설정
-                    }else if (previousConsideredPrice != null) {
+                        previousConsideredPrice = price;
+                    } else if (previousConsideredPrice != null) {
                         change = ((price - previousConsideredPrice) / previousConsideredPrice) * 100;
-                        previousConsideredPrice = price; // 현재 가격을 다음 비교를 위한 기준으로 업데이트
-                    }
-                    else {
+                        previousConsideredPrice = price;
+                    } else {
                         continue;
                     }
                     change = Math.round(change * 100.0) / 100.0;
-                    tempChanges.add(new StockChangePoint(time.toString(), change));
+                    tempChanges.add(new StockChangePoint(timeET.withZoneSameInstant(ZoneId.of("Asia/Seoul")).toString(), change));
                 }
             }
 
-            allIntradayChanges = tempChanges.stream()
-                    .sorted(Comparator.comparing(point -> ZonedDateTime.parse(point.getTimestamp()))) // 시간 순으로 정렬
+            List<StockChangePoint> sortedChanges = tempChanges.stream()
+                    .sorted(Comparator.comparing(point -> ZonedDateTime.parse(point.getTimestamp())))
                     .collect(Collectors.toList());
 
-            if (allIntradayChanges.isEmpty()) { // 데이터가 없으면 그 전날 데이터 가지고 오기
-                System.out.println("No stock data found within the specified time range (23:30-06:00) for " + ticker);
-                dayAgoToFetch++;
-                currentStockPoint = null;
+            allIntradayChangesMap.put(ticker, sortedChanges);
+            currentDataIndexMap.put(ticker, 0);
+            if (!sortedChanges.isEmpty()) {
+                currentStockPointMap.put(ticker, sortedChanges.get(0));
+                System.out.println("Successfully loaded " + sortedChanges.size() + " intraday stock points for " + ticker + ".");
             } else {
-                System.out.println("Successfully loaded " + allIntradayChanges.size() + " intraday stock points.");
-                currentDataIndex = 0;
-                currentStockPoint = allIntradayChanges.get(currentDataIndex);
+                currentStockPointMap.put(ticker, null);
+                // ⭐ 핵심 수정: 데이터를 찾지 못하면 여기에 로그를 남기고,
+                // 이 상황을 displayNextStockChange 메서드에서 처리하도록 유도합니다.
+                System.out.println("No market open data found for " + ticker + " on target date (" + targetDateStartET.toLocalDate() + ").");
             }
+
+
         }catch (Exception e){
             e.printStackTrace();
-            System.err.println("Error fetching or processing stock data: " + e.getMessage());
-            allIntradayChanges.clear();
-            currentStockPoint = null;
+            System.err.println("Error fetching or processing stock data for " + ticker + ": " + e.getMessage());
+            allIntradayChangesMap.put(ticker, new ArrayList<>());
+            currentDataIndexMap.put(ticker, 0);
+            currentStockPointMap.put(ticker, null);
         }
     }
 
+    /*
     public double getCachedStockChange(String ticker) {
         if (cache.containsKey(ticker)) {
             return cache.get(ticker).change;
@@ -225,4 +253,5 @@ public class StockService {
             this.timestamp = timestamp;
         }
     }
+    */
 }

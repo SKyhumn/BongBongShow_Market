@@ -1,4 +1,4 @@
-package com.example.bongbongshow_market.controller;
+/*package com.example.bongbongshow_market.controller;
 
 import com.example.bongbongshow_market.point.StockChangePoint;
 import com.example.bongbongshow_market.service.StockService;
@@ -35,3 +35,4 @@ public class StockApiController {
         return response;
     }
 }
+*/
