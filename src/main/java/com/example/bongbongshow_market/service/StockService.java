@@ -96,7 +96,7 @@ public class StockService {
 
         List<ShopEntity> allGoods = repository.findAll();
         for (ShopEntity goods : allGoods) {
-            double originalPrice = goods.getPrice(); // MySQL에서 가져온 상품의 원래 가격
+            double originalPrice = goods.getUpdatedPrice(); // MySQL에서 가져온 상품의 원래 가격
 
             // 새로운 가격 계산: 원래 가격 * (1 + (변동률 / 100))
             // 예시: 100000 * (1 + (0.5 / 100)) = 100000 * 1.005 = 100500
@@ -108,7 +108,7 @@ public class StockService {
             System.out.printf("  [상품 ID: %s, 상품명: %s] 원래 가격: %.0f원, 적용 후 가격: %.0f원\n",
                     goods.getGoods_id(), goods.getGoods_name(), originalPrice, newCalculatedPrice);
         }
-
+        repository.saveAll(allGoods);
         currentDataIndex++;
     }
 
@@ -146,11 +146,13 @@ public class StockService {
 
             List<StockChangePoint> tempChanges = new ArrayList<>();
 
+            Double previousConsideredPrice = null;
+
             ZonedDateTime targetDateStart = ZonedDateTime.now(ZoneId.of("Asia/Seoul"))
                     .toLocalDate()
                     .minusDays(dayOffset)
                     .atStartOfDay(ZoneId.of("Asia/Seoul"));
-                    ZonedDateTime targetDateEnd = targetDateStart.plusDays(1);
+            ZonedDateTime targetDateEnd = targetDateStart.plusDays(1);
 
             for (int i = 0; i < timestamps.size(); i++) {
                 long ts = timestamps.get(i).asLong();
@@ -169,7 +171,18 @@ public class StockService {
                 ZonedDateTime filterEnd = targetDateEnd.plusDays(1).withHour(6).withMinute(0).withSecond(0).withNano(0);
 
                 if ((time.isEqual(filterStart) || time.isAfter(filterStart)) && time.isBefore(filterEnd)) {
-                    double change = ((price - prevClose) / prevClose) * 100;
+                    double change;
+
+                    if (time.getHour() == 23 && time.getMinute() == 30) {
+                        change = ((price - prevClose) / prevClose) * 100;
+                        previousConsideredPrice = price; // 23:30 가격을 다음 비교를 위한 기준으로 설정
+                    }else if (previousConsideredPrice != null) {
+                        change = ((price - previousConsideredPrice) / previousConsideredPrice) * 100;
+                        previousConsideredPrice = price; // 현재 가격을 다음 비교를 위한 기준으로 업데이트
+                    }
+                    else {
+                        continue;
+                    }
                     change = Math.round(change * 100.0) / 100.0;
                     tempChanges.add(new StockChangePoint(time.toString(), change));
                 }
