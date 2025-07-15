@@ -1,0 +1,28 @@
+.section{
+    display:flex;
+}
+.selection{
+    box-shadow: 0px 7px 10px rgba(124, 124, 124, 0.3);
+    width:11rem;
+    height:35rem;
+    margin-left:4rem;
+    padding-top:1rem;
+    margin-top:1rem;
+}
+.selection p{
+    margin-left:1rem;
+    font-weight:500;
+}
+.item{
+    color:rgb(57, 80, 255);
+    font-weight:700;
+}
+.chart{
+    width:75rem;
+}
+.priceChart{
+    margin-left:1rem;
+}
+.changeRate{
+    margin-left:5rem;
+}
