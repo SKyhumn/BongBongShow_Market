@@ -15,11 +15,11 @@ export default function Ranking(){
             }
         });
         setThreeData(sorted.slice(0,3));
-    });
+    },[data]);
 
     return(
         <div className="ranking-section">
-                      <h1>랭킹</h1>
+            <h1>랭킹</h1>
             {data.length==0?
             (<p>데이터 로딩중</p>):
             (

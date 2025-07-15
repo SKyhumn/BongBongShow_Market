@@ -8,7 +8,6 @@ export default function Chart(){
     let [data,setData]=useState([]);
     let [min,setMin]=useState(null);
 
-    //물품들 중 현재 가격이 가장 낮은 가격
     useEffect(()=>{
         let currentMin=Infinity;
 
@@ -21,7 +20,6 @@ export default function Chart(){
         setMin(currentMin);
     },[priceChange]);
     
-    //가장 낮은 가격의 물품 데이터 추출
     useEffect(()=>{
         if(min==null) return;
         
