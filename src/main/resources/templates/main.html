@@ -1,11 +1,147 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>Title</title>
+    <title>실시간 상품 가격 변동</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 20px; background-color: #f4f7f6; }
+        h1 { color: #333; }
+        #chart-container {
+            width: 90%;
+            max-width: 1200px;
+            margin: 20px auto;
+            padding: 20px;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+    </style>
 </head>
 <body>
-<h1>AAPL 주가 변동률</h1>
-<p>현재 변동률: <span th:text="${#numbers.formatDecimal(change, 1, 2)} + '%'">0%</span></p>
+
+<h1>실시간 상품 가격 변동 차트 📈</h1>
+
+<div id="chart-container">
+    <canvas id="priceChart"></canvas>
+</div>
+
+<script>
+    const ctx = document.getElementById('priceChart').getContext('2d');
+    let priceChart; // 차트 객체를 저장할 변수
+
+    // 각 상품 라인의 색상을 미리 정의
+    const lineColors = [
+        'rgba(255, 99, 132, 1)', 'rgba(54, 162, 235, 1)', 'rgba(75, 192, 192, 1)',
+        'rgba(255, 206, 86, 1)', 'rgba(153, 102, 255, 1)', 'rgba(255, 159, 64, 1)',
+        'rgba(99, 255, 132, 1)', 'rgba(201, 203, 207, 1)'
+    ];
+
+    /**
+     * 차트를 처음 생성하는 함수
+     */
+    async function initializeChart() {
+        // 서버에서 초기 데이터를 가져옴
+        const initialProducts = await fetchRealtimeData();
+
+        // 각 상품에 대한 데이터셋을 생성
+        const datasets = initialProducts.map((product, index) => ({
+            label: `${product.goods_name} (${product.goods_id})`, // 예: 김동현 (g01)
+            data: [product.updatedPrice], // 초기 가격 데이터
+            borderColor: lineColors[index % lineColors.length],
+            backgroundColor: lineColors[index % lineColors.length].replace('1)', '0.2)'),
+            borderWidth: 2,
+            fill: false,
+            tension: 0.1
+        }));
+
+        priceChart = new Chart(ctx, {
+            type: 'line', // 꺾은선 그래프
+            data: {
+                labels: [getCurrentTimestamp()], // x축 레이블 (현재 시간)
+                datasets: datasets
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: { position: 'top' },
+                    title: { display: true, text: '시간에 따른 상품 가격 변화' }
+                },
+                scales: {
+                    y: {
+                        ticks: {
+                            // y축 눈금을 '원' 단위로 포매팅
+                            callback: function(value, index, values) {
+                                return value.toLocaleString('ko-KR') + '원';
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    /**
+     * 백엔드 API를 호출하여 최신 상품 데이터를 가져오는 함수
+     */
+    async function fetchRealtimeData() {
+        try {
+            const response = await fetch('/api/products/realtime');
+            if (!response.ok) {
+                throw new Error('데이터를 가져오는 데 실패했습니다.');
+            }
+            return await response.json();
+        } catch (error) {
+            console.error(error);
+            return [];
+        }
+    }
+
+    /**
+     * 차트 데이터를 주기적으로 업데이트하는 함수
+     */
+    async function updateChartData() {
+        const newProducts = await fetchRealtimeData();
+        if (!priceChart || newProducts.length === 0) return;
+
+        const chart = priceChart.data;
+
+        // 1. x축에 새로운 시간 레이블 추가
+        chart.labels.push(getCurrentTimestamp());
+
+        // 2. 각 상품(dataset)에 새로운 가격 데이터 추가
+        newProducts.forEach((product, index) => {
+            if (chart.datasets[index]) {
+                chart.datasets[index].data.push(product.updatedPrice);
+            }
+        });
+
+        // 3. 차트가 너무 길어지지 않도록 오래된 데이터 제거 (예: 20개 초과 시)
+        const maxDataPoints = 20;
+        if (chart.labels.length > maxDataPoints) {
+            chart.labels.shift(); // 가장 오래된 시간 레이블 제거
+            chart.datasets.forEach(dataset => {
+                dataset.data.shift(); // 각 데이터셋에서 가장 오래된 가격 제거
+            });
+        }
+
+        // 4. 차트 다시 그리기
+        priceChart.update();
+    }
+
+    /**
+     * 현재 시간을 HH:mm:ss 형식의 문자열로 반환하는 함수
+     */
+    function getCurrentTimestamp() {
+        return new Date().toLocaleTimeString('ko-KR', { hour12: false });
+    }
+
+    // 페이지가 로드되면 차트를 초기화하고,
+    // 백엔드 스케줄(10초)에 맞춰 주기적으로 차트를 업데이트합니다.
+    document.addEventListener('DOMContentLoaded', () => {
+        initializeChart();
+        setInterval(updateChartData, 10000); // 10초마다 업데이트
+    });
+</script>
 </body>
 </html>

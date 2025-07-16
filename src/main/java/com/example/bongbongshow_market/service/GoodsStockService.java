@@ -1,0 +1,26 @@
+package com.example.bongbongshow_market.service;
+
+import com.example.bongbongshow_market.entity.ShopEntity;
+import com.example.bongbongshow_market.repository.StockRepository;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+
+@Service
+@RequiredArgsConstructor
+public class GoodsStockService {
+    private final StockRepository repository;
+
+    public void applyStockChange(String goodId, int quantity){
+        ShopEntity shopEntity = repository.findById(goodId)
+                .orElseThrow(() -> new IllegalArgumentException("상품이 존재하지 않음"));
+        int current = shopEntity.getQuantity();
+        if(current < quantity){
+            System.out.println("재고가 부족하빈다");
+            return;
+        }
+
+        shopEntity.setQuantity(current - quantity);
+        repository.save(shopEntity);
+    }
+
+}
