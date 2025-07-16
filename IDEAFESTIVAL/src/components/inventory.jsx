@@ -3,13 +3,12 @@ import { useEffect } from 'react';
 import inventory from '../dummy_data/inventory.json';
 
 export default function Inventory(){
-    const [data,setData]=useState(inventory.example);
     const [fourData,setFourData]=useState([]);
 
     useEffect(()=>{
-        const sorted=[...data].sort((a,b)=>b.quantity-a.quantity);
+        const sorted=[...inventory.example].sort((a,b)=>b.quantity-a.quantity);
         setFourData(sorted.slice(0, 4));
-    },[data]);
+    },[inventory.example]);
 
     return(
         <div className="inventory-section">

@@ -2,11 +2,10 @@ import { useState, useEffect } from 'react';
 import ranking from '../dummy_data/gamedata.json';
 
 export default function Ranking(){
-    let [data, setData]=useState(ranking.example);
     let [threeData, setThreeData]=useState([]);
 
     useEffect(()=>{
-        const sorted=[...data].sort((a,b)=>{
+        const sorted=[...ranking.example].sort((a,b)=>{
             if(b.clickCount!==a.clickCount){
                 return b.clickCount-a.clickCount;
             }
@@ -15,14 +14,11 @@ export default function Ranking(){
             }
         });
         setThreeData(sorted.slice(0,3));
-    },[data]);
+    },[ranking.example]);
 
     return(
         <div className="ranking-section">
             <h1>랭킹</h1>
-            {data.length==0?
-            (<p>데이터 로딩중</p>):
-            (
             <div>
               {threeData.map((a,index)=>(
                 <div className="Ranking" key={index}>
@@ -35,7 +31,6 @@ export default function Ranking(){
                 </div>
               ))}
             </div>
-            )}
         </div>
     );
 }

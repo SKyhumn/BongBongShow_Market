@@ -2,19 +2,23 @@
     "example":[
         {
             "name":"EnergyDrink",
-            "quantity":5
+            "quantity":5,
+            "price":1600
         },
         {
             "name":"Cookie",
-            "quantity":6
+            "quantity":6,
+            "price":1400
         },
         {
             "name":"Chip",
-            "quantity":9
+            "quantity":9,
+            "price":1600
         },
         {
             "name":"Gatorade",
-            "quantity":0
+            "quantity":3,
+            "price":1700
         }
     ]
 }
