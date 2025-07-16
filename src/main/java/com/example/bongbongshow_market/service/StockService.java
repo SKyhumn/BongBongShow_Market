@@ -40,9 +40,25 @@ public class StockService {
 
     private final List<String> tickers = Arrays.asList("AAPL", "MSFT", "GOOG", "AMZN", "NVDA", "TSLA", "META", "NFLX");
 
-    //private int dayAgoToFetch = 1; // 제거된 변수
+    public StockChangePoint getCurrentStockPoint(String ticker) {
+        return currentStockPointMap.get(ticker);
+    }
 
-    //@Getter private StockChangePoint currentStockPoint = null; // 제거된 변수
+    public List<StockChangePoint> getAllIntradayChanges(String ticker) {
+        return allIntradayChangesMap.getOrDefault(ticker, new ArrayList<>());
+    }
+
+    public List<String> getTickers() {
+        return Collections.unmodifiableList(tickers);
+    }
+
+    public void refreshAllTickersData() {
+        for (String ticker : tickers) {
+            fetchAndProcessAllIntradayData(ticker, 1);
+            tickerDayAgoToFetchMap.put(ticker, 1);
+            currentDataIndexMap.put(ticker, 0);
+        }
+    }
 
     @PostConstruct
     public void loadInitialStockData(){
@@ -64,7 +80,7 @@ public class StockService {
             if(currentTickerChanges.isEmpty()){
                 System.out.println("No intraday stock data available for " + ticker + ". Attempting to load next day's data...");
                 currentDayOffset++; // ⭐ 데이터가 없으니 즉시 다음 날짜로 넘김
-                if(currentDayOffset > 5){
+                if(currentDayOffset > 16){
                     currentDayOffset = 1;
                 }
                 tickerDayAgoToFetchMap.put(ticker, currentDayOffset);
@@ -84,7 +100,7 @@ public class StockService {
             if (currentTickerDataIndex >= currentTickerChanges.size()) {
                 System.out.println("All data points for " + ticker + " on current dayOffset " + currentDayOffset + " processed. Moving to next day's data.");
                 currentDayOffset++;
-                if(currentDayOffset > 5){
+                if(currentDayOffset > 15){
                     currentDayOffset = 1;
                 }
                 tickerDayAgoToFetchMap.put(ticker, currentDayOffset);
@@ -100,7 +116,7 @@ public class StockService {
 
             // currentTickerStockPoint 업데이트
             StockChangePoint currentTickerStockPoint = currentTickerChanges.get(currentTickerDataIndex);
-            double stockChangePercentage = currentTickerStockPoint.getChange();
+            double stockChangePercentage = currentTickerStockPoint.getChange() * 10;
 
             // allIntradayChanges 리스트에서 현재 인덱스(currentDataIndex)에 해당하는 StockChangePoint 객체를 가져와
             // currentStockPoint 변수에 저장합니다. 이 값이 AJAX 요청으로 웹에 전달
@@ -110,8 +126,21 @@ public class StockService {
                     currentDayOffset, // 현재 티커의 currentDayOffset 사용
                     stockChangePercentage);
 
+            Map<String, String> goodsToTickerMap = new HashMap<>();
+            goodsToTickerMap.put("g01", "AAPL");
+            goodsToTickerMap.put("g02", "MSFT");
+            goodsToTickerMap.put("g03", "GOOG");
+            goodsToTickerMap.put("g04", "AMZN");
+            goodsToTickerMap.put("g05", "NVDA");
+            goodsToTickerMap.put("g06", "TSLA");
+            goodsToTickerMap.put("g07", "META");
+            goodsToTickerMap.put("g08", "NFLX");
+
             List<ShopEntity> allGoods = repository.findAll(); // 모든 상품을 가져옴
+
             for (ShopEntity goods : allGoods) {
+                String targetTicker = goodsToTickerMap.get(goods.getGoods_id());
+                if (!ticker.equals(targetTicker)) continue;
                 // 특정 티커와 상품을 매핑하는 로직이 없으므로 현재는 모든 상품에 이 변동률을 적용함
                 double originalPrice = goods.getUpdatedPrice();
                 double newCalculatedPrice = originalPrice * (1 + (stockChangePercentage / 100.0));
@@ -130,7 +159,7 @@ public class StockService {
 
 
     public void fetchAndProcessAllIntradayData(String ticker ,int dayOffset){
-        String url = "https://query1.finance.yahoo.com/v8/finance/chart/" + ticker + "?interval=15m&range=5d";
+        String url = "https://query1.finance.yahoo.com/v8/finance/chart/" + ticker + "?interval=15m&range=15d";
 
         try{ // 주가 변동 퍼센트로 가지고 오기
             HttpHeaders headers = new HttpHeaders(); // 브라우저 처럼 보이게 하기
