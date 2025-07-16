@@ -147,8 +147,8 @@ public class StockService {
                 newCalculatedPrice = Math.round(newCalculatedPrice * 100.0) / 100.0;
 
                 goods.setUpdatedPrice(newCalculatedPrice); // ⭐ 업데이트된 가격 설정
-                System.out.printf("  [상품 ID: %s, 상품명: %s] 원래 가격: %.0f원, 적용 후 가격: %.0f원\n",
-                        goods.getGoods_id(), goods.getGoods_name(), originalPrice, newCalculatedPrice);
+                System.out.printf("  [상품 ID: %s, 상품명: %s] 원래 가격: %.0f원, 적용 후 가격: %.0f원\n, 수량: %d\n",
+                        goods.getGoods_id(), goods.getGoods_name(), originalPrice, newCalculatedPrice, goods.getQuantity());
             }
             repository.saveAll(allGoods); // 변경된 모든 상품 저장
             currentTickerDataIndex++;
