@@ -1,5 +1,4 @@
 package com.example.bongbongshow_market.service;
-
 import com.example.bongbongshow_market.entity.ShopEntity;
 import com.example.bongbongshow_market.point.StockChangePoint;
 import com.example.bongbongshow_market.repository.StockRepository;
@@ -278,9 +277,37 @@ public class StockService {
         long timestamp;
 
         CachedStock(double change, long timestamp) {
+            double current = result.at("/meta/regularMarketPrice").asDouble();
+            double prevClose = result.at("/meta/previousClose").asDouble();
+
+            double change = ((current - prevClose) / prevClose) * 100;
+            change = Math.round(change * 100.0) / 100.0;
+            cache.put(ticker, new CachedStock(change, System.currentTimeMillis()));
+
+            System.out.printf("API 호출 - %s 주가 변동률: %.2f%%\n", ticker, change);
+
+            return change;
+        }catch (Exception e){ // 오류 났을때 오류 코드 출력
+            e.printStackTrace();
+        }
+        return 0;
+    }
+
+    public double getCachedStockChange(String ticker){
+        if(cache.containsKey(ticker)){
+            return cache.get(ticker).change;
+        }else {
+            return 0.0;
+        }
+    }
+    static class CachedStock {// 주식 변동을 캐싱하기 위해
+        double change;
+        long timestamp;
+        CachedStock(double change, long timestamp){
             this.change = change;
             this.timestamp = timestamp;
         }
     }
     */
+
 }
