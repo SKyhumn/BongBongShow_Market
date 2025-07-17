@@ -36,4 +36,12 @@ public class TestStockController {
         goodsStockService.applyStockChange(goodsId, amount);
         return ResponseEntity.ok("재고가 감소하였습니다");
     }
+
+    @PostMapping("/{goodsId}/add")
+    public ResponseEntity<String> goodsAmountAdd(
+        @PathVariable String goodsId,
+    @RequestParam(defaultValue = "1") int amount){
+        goodsStockService.addStockChange(goodsId, amount);
+        return ResponseEntity.ok("재고가 증가하였습니다");
+    }
 }

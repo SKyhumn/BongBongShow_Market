@@ -25,4 +25,19 @@ public class GoodsStockService {
         repository.save(shopEntity);
     }
 
+    @Transactional
+    public void addStockChange(String goodId, int quantity){
+        ShopEntity shopEntity = repository.findById(goodId)
+                .orElseThrow(() -> new IllegalArgumentException("상품이 존재하지 않음"));
+        int current = shopEntity.getQuantity();
+        int updateQuantity = current + quantity;
+
+        if(updateQuantity < 0){
+            throw new IllegalArgumentException("재고량이 음수가 될 수 없다");
+        }
+
+        shopEntity.setQuantity(updateQuantity);
+        repository.save(shopEntity);
+    }
+
 }
