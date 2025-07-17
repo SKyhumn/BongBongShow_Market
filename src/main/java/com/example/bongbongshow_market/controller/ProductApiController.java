@@ -17,10 +17,17 @@ public class ProductApiController {
     private final StockRepository repository;
 
     @GetMapping("/api/products/realtime")
-    public List<ShopEntity> getRealtimeProducts() {
-        // DB에 저장된 모든 상품 정보를 찾아 정렬하여 반환합니다.
+    public List<ProductDto> getRealtimeProducts() {
         return repository.findAll().stream()
                 .sorted(Comparator.comparing(ShopEntity::getGoods_id))
+                .map(ProductDto::new)
                 .collect(Collectors.toList());
+    }
+
+    record ProductDto(String goods_id, String goods_name, int price, double updatedPrice) {
+        public ProductDto(ShopEntity entity) {
+            this(entity.getGoods_id(), entity.getGoods_name(), entity.getPrice(),
+                    entity.getUpdatedPrice() != null ? entity.getUpdatedPrice() : 0.0);
+        }
     }
 }

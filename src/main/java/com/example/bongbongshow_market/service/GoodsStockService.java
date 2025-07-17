@@ -1,7 +1,9 @@
 package com.example.bongbongshow_market.service;
 
 import com.example.bongbongshow_market.entity.ShopEntity;
+import com.example.bongbongshow_market.exception.InsufficientStockException;
 import com.example.bongbongshow_market.repository.StockRepository;
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -10,13 +12,13 @@ import org.springframework.stereotype.Service;
 public class GoodsStockService {
     private final StockRepository repository;
 
+    @Transactional
     public void applyStockChange(String goodId, int quantity){
         ShopEntity shopEntity = repository.findById(goodId)
                 .orElseThrow(() -> new IllegalArgumentException("상품이 존재하지 않음"));
         int current = shopEntity.getQuantity();
         if(current < quantity){
-            System.out.println("재고가 부족하빈다");
-            return;
+            throw new InsufficientStockException("재고가 부족합니다");
         }
 
         shopEntity.setQuantity(current - quantity);

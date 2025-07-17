@@ -68,8 +68,8 @@ public class StockService {
         }
     }
 
-    //@Scheduled(fixedRate = 15 * 60 * 1000) // 15분 마다 재사용하기
-    @Scheduled(fixedRate = 10 * 1000) //테스트용
+    @Scheduled(fixedRate = 15 * 60 * 1000) // 15분 마다 재사용하기
+    //@Scheduled(fixedRate = 10 * 1000) //테스트용
     public void displayNextStockChange(){
         for (String ticker : tickers){
             List<StockChangePoint> currentTickerChanges = allIntradayChangesMap.getOrDefault(ticker, new ArrayList<>());

@@ -41,13 +41,11 @@
      * 차트를 처음 생성하는 함수
      */
     async function initializeChart() {
-        // 서버에서 초기 데이터를 가져옴
         const initialProducts = await fetchRealtimeData();
 
-        // 각 상품에 대한 데이터셋을 생성
         const datasets = initialProducts.map((product, index) => ({
-            label: `${product.goods_name} (${product.goods_id})`, // 예: 김동현 (g01)
-            data: [product.updatedPrice], // 초기 가격 데이터
+            label: `${product.goods_name} (${product.goods_id})`,
+            data: [product.price, product.updatedPrice], // 초기 + 최초 업데이트 가격
             borderColor: lineColors[index % lineColors.length],
             backgroundColor: lineColors[index % lineColors.length].replace('1)', '0.2)'),
             borderWidth: 2,
@@ -55,10 +53,12 @@
             tension: 0.1
         }));
 
+        const now = getCurrentTimestamp();
+
         priceChart = new Chart(ctx, {
-            type: 'line', // 꺾은선 그래프
+            type: 'line',
             data: {
-                labels: [getCurrentTimestamp()], // x축 레이블 (현재 시간)
+                labels: [now, now], // 초기 가격 + 첫 업데이트 시간 (동일해도 괜찮음)
                 datasets: datasets
             },
             options: {
@@ -70,8 +70,7 @@
                 scales: {
                     y: {
                         ticks: {
-                            // y축 눈금을 '원' 단위로 포매팅
-                            callback: function(value, index, values) {
+                            callback: function(value) {
                                 return value.toLocaleString('ko-KR') + '원';
                             }
                         }
@@ -140,7 +139,8 @@
     // 백엔드 스케줄(10초)에 맞춰 주기적으로 차트를 업데이트합니다.
     document.addEventListener('DOMContentLoaded', () => {
         initializeChart();
-        setInterval(updateChartData, 10000); // 10초마다 업데이트
+        //setInterval(updateChartData, 10000); // 10초마다 업데이트
+        setInterval(updateChartData, 900000);// 15분마다 업데이트
     });
 </script>
 
